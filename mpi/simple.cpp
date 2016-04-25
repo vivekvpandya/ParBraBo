@@ -13,6 +13,50 @@ typedef struct {
 		vector <long> assignment;
 } Node;
 
+void sendDataSet(long **inputArray, long size, int dest, int tag, MPI_Comm comm) {
+	int totalCount = (size * size);
+	long *buffer = (long *) malloc(sizeof(long) * (totalCount));
+	//buffer[0] = size;
+	int count = 0;
+	for(int i = 0 ; i < size; i++) {
+		for (int j = 0 ; j < size; j++) {
+			buffer[count++] = inputArray[i][j];
+		}
+	}
+	long *sizeBuff = &size;
+	MPI_Send(sizeBuff, 1 , MPI_INT, dest, tag, comm);
+	MPI_Send(buffer,totalCount, MPI_LONG, dest, tag, comm);
+	free(buffer);
+}
+
+void recvDataSet(long ***inputArray, long *size, int src, int tag, MPI_Comm comm) {
+	MPI_Status status;
+
+	MPI_Recv(size, 1, MPI_LONG, src, tag, comm, &status);
+	
+	int totalSize = (*size) * (*size);
+
+	printf("Total size : %d\n", totalSize );
+
+	long *buffer = (long *)malloc(sizeof(long) * (totalSize));
+
+	int count = 0;
+
+	MPI_Recv(buffer, totalSize, MPI_LONG, src, tag, comm, &status);
+
+	*inputArray = (long **) malloc(sizeof(long *) * (*size));
+	printf("Ok\n");
+	for(int i = 0; i < (*size) ; i++) {
+			(*inputArray)[i] = (long *)malloc(sizeof(long) * (*size));
+			for(int j = 0 ; j < (*size) ;j++) {
+				(*inputArray)[i][j] = buffer[count++];
+				printf("%ld\n", (*inputArray)[i][j] );
+			}
+	}
+	free(buffer);
+}
+
+
 void sendNodeMPI(Node *node, int dest, int tag, MPI_Comm comm) {
 	long *buffer =  (long *) malloc(sizeof(long) * 5);
 	buffer[0] = node->bound;
@@ -115,6 +159,38 @@ int main(int argc, char **argv) {
     	printf("Sending data \n");
     	sendNodeMPI(node, 1 , 0, MPI_COMM_WORLD);
 
+
+    	FILE *inputFILE = fopen(argv[1],"r");
+		char *line = NULL;
+		size_t len ;
+		ssize_t read;
+		int noOfJob = 0;
+		
+		if( inputFILE ==  NULL)
+			exit(-2);
+
+		fscanf(inputFILE, "%d", &noOfJob);
+		long **inputArray;
+		long limit;
+		limit = noOfJob;
+		inputArray = (long **) malloc(noOfJob * sizeof(long *));
+		
+		int temp = 0;
+		int i = 0;
+		int j = 0;
+
+		for(i = 0; i < noOfJob ; i++) {
+			inputArray[i] = (long *)malloc(noOfJob * sizeof(long));
+			for(j = 0 ; j < noOfJob ;j++) {
+				fscanf(inputFILE, "%ld ", &inputArray[i][j]);
+				printf("%ld ", inputArray[i][j] );
+			}
+			printf("\n"); 
+		}
+ 		
+ 		printf("Sending data \n");
+ 		sendDataSet(inputArray, noOfJob, 1, 0, MPI_COMM_WORLD);
+
     }
     if (rank == 1)
     {	Node *  node = new Node();
@@ -130,6 +206,19 @@ int main(int argc, char **argv) {
     	for(auto data : node->assignment) {
     		printf("assignment value : %ld\n", data);
     	}
+
+    	long **inputArray;
+		long limit;
+
+		recvDataSet(&inputArray, &limit, 0, 0, MPI_COMM_WORLD);
+
+		for(int i = 0; i < limit ; i++) {
+			for(int j = 0 ; j < limit ;j++) {
+				printf("%ld ", inputArray[i][j] );
+			}
+			printf("\n"); 
+		}
+
         // for (i=0; i<10; i++)
         //     buffer[i] = -1;
         // MPI_Recv(buffer, 10, MPI_INT, 0, 123, MPI_COMM_WORLD, &status);
