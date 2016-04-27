@@ -48,6 +48,7 @@ void recursiony(Node *sol, long y, int limit) {
 }
 
 void recursionx(Node *sol, long y, long x, int limit) {
+	static int processDepth = 2;
 	sol->xDone.insert(x);
 	sol->actualCost = sol->actualCost + inputArray[y][x];
 	sol->bound = sol->actualCost;
@@ -69,16 +70,23 @@ void recursionx(Node *sol, long y, long x, int limit) {
 		}
 	}
 
-	if( sol->yDone.size() == limit){
-		updateBestSolution(sol);
+	// if( sol->yDone.size() == limit){
+	// 	updateBestSolution(sol);
+	// } else {
+	// 	if(sol->bound < globalBound) {
+	// 		insertLiveNode(sol);
+	// 	} else {
+	// 		printf("Branch pruned GlobalBound : %ld, SolutionBound : %ld \n",globalBound, sol->bound );
+	// 	}
+	// }
+	
+	if(sol->yDone.size() != limit &&  processDepth != 0) {
+		processDepth--;
+		branch((void *)sol);
 	} else {
-		y++;
-		if(sol->bound < globalBound) {
-			insertLiveNode(sol);
-		} else {
-			printf("Branch pruned GlobalBound : %ld, SolutionBound : %ld \n",globalBound, sol->bound );
-		}
-	}
+		// send node back to master
+		sendNodeMPI(sol, 0, 0, MPI_COMM_WORLD);
+	}	
 }
 
 
