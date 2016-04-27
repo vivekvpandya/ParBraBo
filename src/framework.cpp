@@ -82,10 +82,10 @@ void sendNodeMPI(Node *node, int dest, int tag, MPI_Comm comm) {
 	free(buffer2);
 }
 
-void recvNodeMPI(Node *node, int src, int tag, MPI_Comm comm) {
+void recvNodeMPI(Node *node, int src, int tag, MPI_Comm comm, MPI_Status *status) {
 	long *buffer = (long *)malloc(sizeof(long) * 5);
-	MPI_Status status;
-	MPI_Recv(buffer, 5 , MPI_LONG, src , tag, comm, &status);
+	//MPI_Status status;
+	MPI_Recv(buffer, 5 , MPI_LONG, src , tag, comm, status);
 	// printf("Bound value received : %ld\n", buffer[0]);
 	// printf("ActualCost value received : %ld\n", buffer[1]);
 	// printf("yDone size value received : %ld\n", buffer[2]);
@@ -96,7 +96,7 @@ void recvNodeMPI(Node *node, int src, int tag, MPI_Comm comm) {
 	node->actualCost = buffer[1];
 	int receiveCount = buffer[2] + buffer[3] + buffer[4];
 	long *buffer2 =  (long *) malloc(sizeof(long) * receiveCount);
-	MPI_Recv(buffer2, receiveCount , MPI_LONG, src , tag, comm, &status);
+	MPI_Recv(buffer2, receiveCount , MPI_LONG, src , tag, comm, status);
 	int count = 0;
 	for(int i = 0; i < buffer[2]; i++) {
 		node->yDone.insert(buffer2[count++]);
@@ -231,6 +231,7 @@ int main(int argc, char **argv) {
 
 		for (int i = 1; i < size; i++) {
 			// send problem matrix to all slave process
+			printf("Sending the dataset to the slave %d\n", i); 
 			sendDataSet(inputArray, noOfJob, i, 0, MPI_COMM_WORLD);			
 		}
 
@@ -255,6 +256,7 @@ int main(int argc, char **argv) {
 					if(n != NULL) {
 						// send the node to a slave process
 						numOfCurPath++;
+						printf("Sending the task to the slave %d\n", curSlave); 
 						sendNodeMPI((Node *)n, curSlave, 0, MPI_COMM_WORLD);
 						curSlave++;
 						if(curSlave >= size)
@@ -264,11 +266,18 @@ int main(int argc, char **argv) {
 				//}
 			}
 			solutionFound = true;
+		
 			while(numOfCurPath != 0) {
+
 				numOfCurPath--;
 				// wait for slave to return the node details
-				Node *  sol = new Node();
-    			recvNodeMPI(sol,MPI_ANY_SOURCE,0,MPI_COMM_WORLD);
+				int dataToRecv;
+				MPI_Status st;
+				MPI_Recv(&dataToRecv, 1, MPI_INT, MPI_ANY_SOURCE , SIZEMSG, MPI_COMM_WORLD, &status);
+
+				for(int i = 0 ; i < dataToRecv ; i++){
+					Node *  sol = new Node();
+    				recvNodeMPI(sol,status.MPI_SOURCE,0,MPI_COMM_WORLD,&st);
     			if( sol->yDone.size() == limit){
 					updateBestSolution(sol);
 				} else {
@@ -279,6 +288,8 @@ int main(int argc, char **argv) {
 						printf("Branch pruned GlobalBound : %ld, SolutionBound : %ld \n",globalBound, sol->bound );
 					}
 				}
+				}
+				
 			}
 		}
 
@@ -287,18 +298,23 @@ int main(int argc, char **argv) {
 		for (long it = 0; it < size ; it++) {
 			printf("JOB : %ld assigned to PERSON : %ld\n", it, currentSol[it]);
 		}
-		
+
 	} else {
 		// every slave process receives inputMatrix from master process 
-
+		bool solutionFound = false;
 		recvDataSet(&inputArray, &limit, 0, 0, MPI_COMM_WORLD);
+		printf("Receiving the dataset for the slave %d\n", rank); 
 		
 		// printMatrix(inputArray,limit); // verifying recieved data
-		Node *  node = new Node();
-    	recvNodeMPI(node, 0,0,MPI_COMM_WORLD);
-    	void *n = (void *)node;
-    	branch(n);
-
+		while (true) {
+			Node *  node = new Node();
+    		recvNodeMPI(node, 0,0,MPI_COMM_WORLD, &status);
+    		printf("received task for the slave %d\n", rank); 
+    		void *n = (void *)node;
+    		branch(n);
+    		sendUpdates();
+		}
+		
 	}
 	
 	return 0;

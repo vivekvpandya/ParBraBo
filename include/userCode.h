@@ -21,5 +21,7 @@ extern void sendNodeMPI(Node *node, int dest, int tag, MPI_Comm comm);
 void initialize(void * root);
 void branch(void * SubPro);
 void evaluate(void * SubPro);
+void sendUpdates();
+
 
 #endif

@@ -7,6 +7,8 @@ typedef struct {
 	int limit;
 } Evaluation;
 
+vector <Node *> sendList;
+
 void recursionx(Node *sol, long y, long x, int limit);
 void evaluate(void * EvaluationNode);
 
@@ -85,8 +87,12 @@ void recursionx(Node *sol, long y, long x, int limit) {
 		branch((void *)sol);
 	} else {
 		// send node back to master
-		sendNodeMPI(sol, 0, 0, MPI_COMM_WORLD);
-	}	
+		//sendNodeMPI(sol, 0, 0, MPI_COMM_WORLD);
+		sendList.push_back(sol);
+
+	}
+
+
 }
 
 
@@ -119,3 +125,11 @@ void evaluate(void * SubPro) {
 	delete(Eval);
 }
 
+void sendUpdates() {
+	int size = sendList.size();
+	printf("Sending %d nodes to the master\n", size); 
+	MPI_Send(&size, 1, MPI_INT, 0, SIZEMSG, MPI_COMM_WORLD);
+	for (int i = 0; i < size;  i++) {
+		sendNodeMPI(sendList[i], 0, 0, MPI_COMM_WORLD);
+	}
+}
