@@ -54,15 +54,16 @@ void recvDataSet(long ***inputArray, long *size, int src, int tag, MPI_Comm comm
 }
 
 void sendNodeMPI(Node *node, int dest, int tag, MPI_Comm comm) {
-	long *buffer =  (long *) malloc(sizeof(long) * 5);
+	long *buffer =  (long *) malloc(sizeof(long) * 6);
 	buffer[0] = node->bound;
-	buffer[1] = node->actualCost;
-	buffer[2] = node->yDone.size();
-	buffer[3] = node->xDone.size();
-	buffer[4] = node->assignment.size();
+	buffer[1] = node->globalBound;
+	buffer[2] = node->actualCost;
+	buffer[3] = node->yDone.size();
+	buffer[4] = node->xDone.size();
+	buffer[5] = node->assignment.size();
 	//printf("Sending values : %ld, %ld, %ld ,%ld , %ld\n", buffer[0], buffer[1], buffer[2], buffer[3], buffer[4] );
-	MPI_Send(buffer,5, MPI_LONG, dest, tag, comm);
-	int totalDataSize = buffer[2] + buffer[3] + buffer[4];
+	MPI_Send(buffer,6, MPI_LONG, dest, tag, comm);
+	int totalDataSize = buffer[3] + buffer[4] + buffer[5];
 	long *buffer2 =  (long *) malloc(sizeof(long) * totalDataSize);
 	int count = 0;
 	for(auto data : node->yDone) {
@@ -83,9 +84,9 @@ void sendNodeMPI(Node *node, int dest, int tag, MPI_Comm comm) {
 }
 
 void recvNodeMPI(Node *node, int src, int tag, MPI_Comm comm, MPI_Status *status) {
-	long *buffer = (long *)malloc(sizeof(long) * 5);
+	long *buffer = (long *)malloc(sizeof(long) * 6);
 	//MPI_Status status;
-	MPI_Recv(buffer, 5 , MPI_LONG, src , tag, comm, status);
+	MPI_Recv(buffer, 6 , MPI_LONG, src , tag, comm, status);
 	// printf("Bound value received : %ld\n", buffer[0]);
 	// printf("ActualCost value received : %ld\n", buffer[1]);
 	// printf("yDone size value received : %ld\n", buffer[2]);
@@ -93,20 +94,21 @@ void recvNodeMPI(Node *node, int src, int tag, MPI_Comm comm, MPI_Status *status
 	// printf("Assignment value received : %ld\n", buffer[4]);
 
 	node->bound = buffer[0];
-	node->actualCost = buffer[1];
-	int receiveCount = buffer[2] + buffer[3] + buffer[4];
+	node->globalBound = buffer[1];
+	node->actualCost = buffer[2];
+	int receiveCount = buffer[3] + buffer[4] + buffer[5];
 	long *buffer2 =  (long *) malloc(sizeof(long) * receiveCount);
 	MPI_Recv(buffer2, receiveCount , MPI_LONG, src , tag, comm, status);
 	int count = 0;
-	for(int i = 0; i < buffer[2]; i++) {
+	for(int i = 0; i < buffer[3]; i++) {
 		node->yDone.insert(buffer2[count++]);
 	}
 
-	for(int i = 0; i < buffer[3]; i++) {
+	for(int i = 0; i < buffer[4]; i++) {
 		node->xDone.insert(buffer2[count++]);
 	}
 
-	for(int i = 0; i < buffer[4]; i++) {
+	for(int i = 0; i < buffer[5]; i++) {
 		node->assignment.push_back(buffer2[count++]);
 	}
 

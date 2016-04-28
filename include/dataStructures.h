@@ -14,6 +14,7 @@ using namespace std;
 */
 typedef struct {
 		long bound;
+		long globalBound;
 		long actualCost;
 		set<long> yDone;
 		set<long> xDone;
