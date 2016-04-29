@@ -129,7 +129,7 @@ long globalBound = INF;
 vector <long> currentSol;
 long **inputArray;
 long limit;
-
+int processDepth;
 //Framework Code starts
 
 set <Node *> liveNodes;
@@ -138,6 +138,7 @@ void insertLiveNode(Node *solution) {
 	// #pragma omp critical (insert)
 	// {
 		if(solution->bound < globalBound) {
+			solution->globalBound = globalBound;
 			liveNodes.insert(solution);
 		} //else { printf("Branch pruned due to bound value\n");
 	//	}
@@ -256,18 +257,26 @@ int main(int argc, char **argv) {
 						n = chooseBestLiveNode();
 					// }
 					if(n != NULL) {
-						// send the node to a slave process
-						numOfCurPath++;
-						printf("Sending the task to the slave %d\n", curSlave); 
-						sendNodeMPI((Node *)n, curSlave, 0, MPI_COMM_WORLD);
-						curSlave++;
-						if(curSlave >= size)
-							curSlave = 1;
-						//branch(n);
+						Node *node = (Node *)n;
+						if(node->bound < globalBound) {
+							// send the node to a slave process
+							numOfCurPath++;
+							printf("Sending the task to the slave %d\n", curSlave); 
+							sendNodeMPI((Node *)n, curSlave, 0, MPI_COMM_WORLD);
+							curSlave++;
+							if(curSlave >= size){
+								curSlave = 1;
+								break;
+							}
+							//branch(n);
+						} else {
+							printf("+++++++++++++++++++++++++++++++ Node not sent to slaves +++++++++++++++++++++++++++++++\n");
+						}
 					}
 				//}
 			}
-			solutionFound = true;
+			if(liveNodes.size() == 0)
+				solutionFound = true;
 		
 			while(numOfCurPath != 0) {
 
@@ -280,18 +289,24 @@ int main(int argc, char **argv) {
 				for(int i = 0 ; i < dataToRecv ; i++){
 					Node *  sol = new Node();
     				recvNodeMPI(sol,status.MPI_SOURCE,0,MPI_COMM_WORLD,&st);
-    			if( sol->yDone.size() == limit){
-					updateBestSolution(sol);
-				} else {
-					if(sol->bound < globalBound) {
-						solutionFound = false;
-						insertLiveNode(sol);
+	    			if( sol->yDone.size() == limit) {
+						updateBestSolution(sol);
+						if(sol->bound <= globalBound) {
+							int bound = sol->bound;
+							 MPI_Request request;
+							for(int i=1; i < size; i++) {
+								MPI_Isend(&bound, 1, MPI_LONG, i, BOUNDUPDATE, MPI_COMM_WORLD, &request);
+							}
+						}
 					} else {
-						printf("Branch pruned GlobalBound : %ld, SolutionBound : %ld \n",globalBound, sol->bound );
+						if(sol->bound < globalBound) {
+							solutionFound = false;
+							insertLiveNode(sol);
+						} else {
+							printf("Branch pruned GlobalBound : %ld, SolutionBound : %ld \n",globalBound, sol->bound );
+						}
 					}
 				}
-				}
-				
 			}
 		}
 
@@ -304,6 +319,7 @@ int main(int argc, char **argv) {
 	} else {
 		// every slave process receives inputMatrix from master process 
 		bool solutionFound = false;
+		processDepth = 20;
 		recvDataSet(&inputArray, &limit, 0, 0, MPI_COMM_WORLD);
 		printf("Receiving the dataset for the slave %d\n", rank); 
 		
@@ -313,8 +329,11 @@ int main(int argc, char **argv) {
     		recvNodeMPI(node, 0,0,MPI_COMM_WORLD, &status);
     		printf("received task for the slave %d\n", rank); 
     		void *n = (void *)node;
+    		if(processDepth <= 0)
+    			processDepth = 20;
     		branch(n);
     		sendUpdates();
+    		free(node);
 		}
 		
 	}

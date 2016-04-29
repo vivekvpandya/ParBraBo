@@ -11,7 +11,7 @@ extern vector <long> currentSol;
 extern long **inputArray;
 extern long limit;
 extern set <Node *> liveNodes;
-
+extern int processDepth;
 
 // extern void insertLiveNode(Node *solution);
 // extern void updateBestSolution(Node *solution);

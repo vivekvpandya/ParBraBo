@@ -36,7 +36,7 @@ void recursiony(Node *sol, long y, int limit) {
 				newSol->assignment[it] = sol->assignment[it];
 			}
 
-			if(newSol->bound < globalBound){
+			if(newSol->bound < newSol->globalBound){
 				Evaluation *Eval =  new Evaluation();
 				Eval->sol = newSol;
 				Eval->y = y;
@@ -51,7 +51,7 @@ void recursiony(Node *sol, long y, int limit) {
 }
 
 void recursionx(Node *sol, long y, long x, int limit) {
-	static int processDepth = 15;
+	
 	sol->xDone.insert(x);
 	sol->actualCost = sol->actualCost + inputArray[y][x];
 	sol->bound = sol->actualCost;
@@ -83,18 +83,15 @@ void recursionx(Node *sol, long y, long x, int limit) {
 	// 	}
 	// }
 	if(sol->bound < sol->globalBound) {
-	if(sol->yDone.size() != limit &&  processDepth != 0) {
-		processDepth--;
-		branch((void *)sol);
-	} else {
-		// send node back to master
-		//sendNodeMPI(sol, 0, 0, MPI_COMM_WORLD);
-			sendList.push_back(sol);
+		if(sol->yDone.size() != limit &&  processDepth != 0) {
+			processDepth--;
+			branch((void *)sol);
+		} else { 
+			// send node back to master
+			//sendNodeMPI(sol, 0, 0, MPI_COMM_WORLD);
+				sendList.push_back(sol);
 		}
-}
-
-
-
+	}
 }
 
 
@@ -135,4 +132,5 @@ void sendUpdates() {
 	for (int i = 0; i < size;  i++) {
 		sendNodeMPI(sendList[i], 0, 0, MPI_COMM_WORLD);
 	}
+	sendList.clear();
 }
