@@ -7,7 +7,8 @@ typedef struct {
 	int limit;
 } Evaluation;
 
-vector <Node *> sendList;
+set <Node *> sendSet;
+long updatedBound = INF;
 
 void recursionx(Node *sol, long y, long x, int limit);
 void evaluate(void * EvaluationNode);
@@ -36,7 +37,13 @@ void recursiony(Node *sol, long y, int limit) {
 				newSol->assignment[it] = sol->assignment[it];
 			}
 
-			if(newSol->bound < newSol->globalBound){
+			if (globalBound > newSol->globalBound) {
+				globalBound = newSol->globalBound;
+			}
+
+			
+
+			if(newSol->bound < globalBound){
 				Evaluation *Eval =  new Evaluation();
 				Eval->sol = newSol;
 				Eval->y = y;
@@ -82,6 +89,15 @@ void recursionx(Node *sol, long y, long x, int limit) {
 	// 		printf("Branch pruned GlobalBound : %ld, SolutionBound : %ld \n",globalBound, sol->bound );
 	// 	}
 	// }
+
+	// if(globalBound > updatedBound) {
+	// 	globalBound = updatedBound;
+	// }
+
+	if (globalBound > sol->globalBound) {
+		globalBound = sol->globalBound;
+	}
+
 	if(sol->bound < sol->globalBound) {
 		if(sol->yDone.size() != limit &&  processDepth != 0) {
 			processDepth--;
@@ -89,7 +105,20 @@ void recursionx(Node *sol, long y, long x, int limit) {
 		} else { 
 			// send node back to master
 			//sendNodeMPI(sol, 0, 0, MPI_COMM_WORLD);
-				sendList.push_back(sol);
+			if(sol->yDone.size() == limit) {
+				printf("A solution found on local machine\n");
+				set <Node *> tempSet;
+				for(auto sendItem : sendSet) {
+					if(sol->bound < sendItem->bound) {
+						tempSet.insert(sendItem);
+					}
+				}
+				printf("Number of removed solution : %ld\n",tempSet.size() );
+				for(auto removeItem : tempSet) {
+					sendSet.erase(removeItem);
+				}
+			}	
+				sendSet.insert(sol);
 		}
 	}
 }
@@ -122,15 +151,15 @@ void evaluate(void * SubPro) {
 	long x = Eval->x;
 	long limit = Eval->limit;
 	recursionx(newSol,y,x,limit);
-	delete(Eval);
 }
 
-void sendUpdates() {
-	int size = sendList.size();
+void sendUpdates() { 
+	
+	int size = sendSet.size();
 	printf("Sending %d nodes to the master\n", size); 
 	MPI_Send(&size, 1, MPI_INT, 0, SIZEMSG, MPI_COMM_WORLD);
-	for (int i = 0; i < size;  i++) {
-		sendNodeMPI(sendList[i], 0, 0, MPI_COMM_WORLD);
+	for(auto sendItem : sendSet){
+		sendNodeMPI(sendItem, 0, 0, MPI_COMM_WORLD);	
 	}
-	sendList.clear();
+	sendSet.clear();
 }

@@ -291,13 +291,6 @@ int main(int argc, char **argv) {
     				recvNodeMPI(sol,status.MPI_SOURCE,0,MPI_COMM_WORLD,&st);
 	    			if( sol->yDone.size() == limit) {
 						updateBestSolution(sol);
-						if(sol->bound <= globalBound) {
-							int bound = sol->bound;
-							 MPI_Request request;
-							for(int i=1; i < size; i++) {
-								MPI_Isend(&bound, 1, MPI_LONG, i, BOUNDUPDATE, MPI_COMM_WORLD, &request);
-							}
-						}
 					} else {
 						if(sol->bound < globalBound) {
 							solutionFound = false;
@@ -316,11 +309,14 @@ int main(int argc, char **argv) {
 			printf("JOB : %ld assigned to PERSON : %ld\n", it, currentSol[it]);
 		}
 
+		//MPI_Finalize();
+
 	} else {
 		// every slave process receives inputMatrix from master process 
 		bool solutionFound = false;
 		processDepth = 20;
 		recvDataSet(&inputArray, &limit, 0, 0, MPI_COMM_WORLD);
+		globalBound = INF;
 		printf("Receiving the dataset for the slave %d\n", rank); 
 		
 		// printMatrix(inputArray,limit); // verifying recieved data
