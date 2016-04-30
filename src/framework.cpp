@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cctype>
-//#include <omp.h>
+#include <omp.h>
 #include <mpi.h>
 
 #include "userCode.h"
@@ -245,7 +245,7 @@ int main(int argc, char **argv) {
 
 		for (int i = 1; i < size; i++) {
 			// send problem matrix to all slave process
-			printf("Sending the dataset to the slave %d\n", i); 
+			//printf("Sending the dataset to the slave %d\n", i); 
 			sendDataSet(inputArray, noOfJob, i, 0, MPI_COMM_WORLD);			
 		}
 
@@ -259,7 +259,7 @@ int main(int argc, char **argv) {
 		int curSlave = 1; // this is used to implement round robin task assignment among slave nodes
 		while(solutionFound != true) {
 			while(!liveNodes.empty()) { 
-				printf("liveNodes size : %ld\n", liveNodes.size());
+				//printf("liveNodes size : %ld\n", liveNodes.size());
 				// #pragma omp parallel
 				// {	numOfThreads = omp_get_num_threads();
 					void *n;
@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
 						if(node->bound < globalBound) {
 							// send the node to a slave process
 							numOfCurPath++;
-							printf("Sending the task to the slave %d\n", curSlave); 
+							//printf("Sending the task to the slave %d\n", curSlave); 
 							sendNodeMPI((Node *)n, curSlave, 0, MPI_COMM_WORLD);
 							free(n);
 							curSlave++;
@@ -282,7 +282,7 @@ int main(int argc, char **argv) {
 							}
 							//branch(n);
 						} else {
-							printf("+++++++++++++++++++++++++++++++ Node not sent to slaves +++++++++++++++++++++++++++++++\n");
+							//printf("+++++++++++++++++++++++++++++++ Node not sent to slaves +++++++++++++++++++++++++++++++\n");
 						}
 					}
 				//}
@@ -290,29 +290,75 @@ int main(int argc, char **argv) {
 			if(liveNodes.size() == 0)
 				solutionFound = true;
 		
+			// while(numOfCurPath != 0) {
+
+			// 	numOfCurPath--;
+			// 	// wait for slave to return the node details
+			// 	int dataToRecv;
+			// 	MPI_Status st;
+			// 	MPI_Recv(&dataToRecv, 1, MPI_INT, MPI_ANY_SOURCE , SIZEMSG, MPI_COMM_WORLD, &status);
+
+			// 	for(int i = 0 ; i < dataToRecv ; i++){
+			// 		Node *  sol = new Node();
+   //  				recvNodeMPI(sol,status.MPI_SOURCE,0,MPI_COMM_WORLD,&st);
+	  //   			if( sol->yDone.size() == limit) {
+			// 			updateBestSolution(sol);
+			// 		} else {
+			// 			if(sol->bound < globalBound) {
+			// 				solutionFound = false;
+			// 				insertLiveNode(sol);
+			// 			} else {
+			// 				printf("Branch pruned GlobalBound : %ld, SolutionBound : %ld \n",globalBound, sol->bound );
+			// 			}
+			// 		}
+			// 	}
+			// }
+
 			while(numOfCurPath != 0) {
 
-				numOfCurPath--;
-				// wait for slave to return the node details
-				int dataToRecv;
-				MPI_Status st;
-				MPI_Recv(&dataToRecv, 1, MPI_INT, MPI_ANY_SOURCE , SIZEMSG, MPI_COMM_WORLD, &status);
+                numOfCurPath--;
+                // wait for slave to return the node details
+                int dataToRecv;
+                
+                MPI_Status st;
+                MPI_Recv(&dataToRecv, 1, MPI_INT, MPI_ANY_SOURCE , SIZEMSG, MPI_COMM_WORLD, &status);
+                
+                
+                Node ** recvNodes = (Node**)malloc(sizeof(Node*) * dataToRecv);
+                
+                for(int i = 0 ; i < dataToRecv ; i++){
+                    Node *sol = new Node();
+                    recvNodeMPI(sol,status.MPI_SOURCE,0,MPI_COMM_WORLD,&st);
+                    //printNode(sol);
+                    recvNodes[i] = sol;
 
-				for(int i = 0 ; i < dataToRecv ; i++){
-					Node *  sol = new Node();
-    				recvNodeMPI(sol,status.MPI_SOURCE,0,MPI_COMM_WORLD,&st);
-	    			if( sol->yDone.size() == limit) {
-						updateBestSolution(sol);
-					} else {
-						if(sol->bound < globalBound) {
-							solutionFound = false;
-							insertLiveNode(sol);
-						} else {
-							printf("Branch pruned GlobalBound : %ld, SolutionBound : %ld \n",globalBound, sol->bound );
-						}
-					}
-				}
-			}
+                }
+                
+                if(dataToRecv > 0){
+                    omp_set_num_threads(dataToRecv);
+                    #pragma omp parallel
+                    {    
+                        int tid = omp_get_thread_num();
+                        //printf("Creating thread: %d\n", tid);
+                        //printNode(recvNodes[tid]);
+                        
+                        if( recvNodes[tid]->yDone.size() == limit) {
+                            #pragma omp critical (update_solution)
+                            updateBestSolution(recvNodes[tid]);
+                        } else {
+                            if(recvNodes[tid]->bound < globalBound) {
+                                solutionFound = false;
+                                #pragma omp critical (insert_solution)
+                                //printf("Before insert live node\n");
+                                insertLiveNode(recvNodes[tid]);
+                            } else {
+                                
+                                //printf("Branch pruned by Thread %d GlobalBound : %ld, SolutionBound : %ld \n",tid, globalBound, recvNodes[tid]->bound );
+                            }
+                        }
+                    }
+                }
+            }
 		}
 
 		for (int i = 1; i < size; i++) {
@@ -336,7 +382,7 @@ int main(int argc, char **argv) {
 		recvDataSet(&inputArray, &limit, 0, 0, MPI_COMM_WORLD);
 		processDepth = limit/2;
 		globalBound = INF;
-		printf("Receiving the dataset for the slave %d\n", rank); 
+		//printf("Receiving the dataset for the slave %d\n", rank); 
 		
 		// printMatrix(inputArray,limit); // verifying recieved data
 		while (true) {
@@ -347,7 +393,7 @@ int main(int argc, char **argv) {
     			break;
     		}
 
-    		printf("received task for the slave %d\n", rank); 
+    		//printf("received task for the slave %d\n", rank); 
     		void *n = (void *)node;
     		if(processDepth <= 0)
     			processDepth = limit/2;
