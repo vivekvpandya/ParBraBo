@@ -80,19 +80,6 @@ void recursionx(Node *sol, long y, long x, int limit) {
 		}
 	}
 
-	// if( sol->yDone.size() == limit){
-	// 	updateBestSolution(sol);
-	// } else {
-	// 	if(sol->bound < globalBound) {
-	// 		insertLiveNode(sol);
-	// 	} else {
-	// 		printf("Branch pruned GlobalBound : %ld, SolutionBound : %ld \n",globalBound, sol->bound );
-	// 	}
-	// }
-
-	// if(globalBound > updatedBound) {
-	// 	globalBound = updatedBound;
-	// }
 
 	if (globalBound > sol->globalBound) {
 		globalBound = sol->globalBound;
@@ -159,7 +146,8 @@ void sendUpdates() {
 	printf("Sending %d nodes to the master\n", size); 
 	MPI_Send(&size, 1, MPI_INT, 0, SIZEMSG, MPI_COMM_WORLD);
 	for(auto sendItem : sendSet){
-		sendNodeMPI(sendItem, 0, 0, MPI_COMM_WORLD);	
+		sendNodeMPI(sendItem, 0, 0, MPI_COMM_WORLD);
+		free(sendItem);	
 	}
 	sendSet.clear();
 }

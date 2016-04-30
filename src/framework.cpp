@@ -130,6 +130,7 @@ vector <long> currentSol;
 long **inputArray;
 long limit;
 int processDepth;
+Node * prevSol = NULL;
 //Framework Code starts
 
 set <Node *> liveNodes;
@@ -140,8 +141,9 @@ void insertLiveNode(Node *solution) {
 		if(solution->bound < globalBound) {
 			solution->globalBound = globalBound;
 			liveNodes.insert(solution);
-		} //else { printf("Branch pruned due to bound value\n");
-	//	}
+		} else { 
+			free(solution);
+		}
 	//}
 }
 
@@ -152,41 +154,50 @@ void updateBestSolution(Node *solution) {
 			printf("Solution found : %ld \n", solution->bound);
 			globalBound = solution->bound;
 			currentSol = solution->assignment;
+			if(prevSol != NULL) {
+				free(prevSol);
+			}
+			prevSol = solution;
 		}
 	//}
 }
 	
 void * chooseBestLiveNode() {
+	// In one iteration depth first node will be explored in next iteration best first will be traveresd 
 
-	/* Following code implements best first
-	int minBound = INF;
-	Node * liveNode = NULL;
-	for (auto sol : liveNodes) {
-		if(minBound > sol->bound) {
-			minBound = sol->bound;
-			liveNode = sol;
-		}
-	}
-	liveNodes.erase(liveNode);
-	return (void *)liveNode;
-	*/
-
-	// Following code implements depth first 
-	// depth first results into more prunning of branches
-	Node *liveNode = NULL;
-	if(!liveNodes.empty()) {
+	// /* Following code implements best first */
+	static bool evenOdd = true;
+	if (evenOdd) {
+		int minBound = INF;
+		Node * liveNode = NULL;
 		for (auto sol : liveNodes) {
-			if(liveNode == NULL) {
+			if(minBound > sol->bound) {
+				minBound = sol->bound;
 				liveNode = sol;
-			} else {
-				if(liveNode->yDone.size() < sol->yDone.size()) {
-					liveNode = sol;
-				}
 			}
 		}
 		liveNodes.erase(liveNode);
+		evenOdd =  !evenOdd;
+		return (void *)liveNode;
+	} else {
+		// Following code implements depth first 
+		// depth first results into more prunning of branches
+		Node *liveNode = NULL;
+		if(!liveNodes.empty()) {
+			for (auto sol : liveNodes) {
+				if(liveNode == NULL) {
+					liveNode = sol;
+				} else {
+					if(liveNode->yDone.size() < sol->yDone.size()) {
+						liveNode = sol;
+					}
+				}
+			}
+			liveNodes.erase(liveNode);
+		}
+		evenOdd =  !evenOdd;
+		return (void *)liveNode;
 	}
-	return (void *)liveNode;
 }	
 
 int main(int argc, char **argv) {
@@ -263,6 +274,7 @@ int main(int argc, char **argv) {
 							numOfCurPath++;
 							printf("Sending the task to the slave %d\n", curSlave); 
 							sendNodeMPI((Node *)n, curSlave, 0, MPI_COMM_WORLD);
+							free(n);
 							curSlave++;
 							if(curSlave >= size){
 								curSlave = 1;
@@ -303,19 +315,26 @@ int main(int argc, char **argv) {
 			}
 		}
 
+		for (int i = 1; i < size; i++) {
+			sendNodeMPI((Node *)prevSol, i, 0, MPI_COMM_WORLD);			
+		}
+		free(prevSol);
+
 		printf("solution : %ld\n",globalBound );
+
 		long size = currentSol.size();
 		for (long it = 0; it < size ; it++) {
 			printf("JOB : %ld assigned to PERSON : %ld\n", it, currentSol[it]);
 		}
 
-		//MPI_Finalize();
+		MPI_Finalize();
 
 	} else {
 		// every slave process receives inputMatrix from master process 
 		bool solutionFound = false;
-		processDepth = 20;
+		
 		recvDataSet(&inputArray, &limit, 0, 0, MPI_COMM_WORLD);
+		processDepth = limit/2;
 		globalBound = INF;
 		printf("Receiving the dataset for the slave %d\n", rank); 
 		
@@ -323,15 +342,21 @@ int main(int argc, char **argv) {
 		while (true) {
 			Node *  node = new Node();
     		recvNodeMPI(node, 0,0,MPI_COMM_WORLD, &status);
+    		
+    		if(node->yDone.size() == limit) {
+    			break;
+    		}
+
     		printf("received task for the slave %d\n", rank); 
     		void *n = (void *)node;
     		if(processDepth <= 0)
-    			processDepth = 20;
+    			processDepth = limit/2;
+    		
     		branch(n);
     		sendUpdates();
     		free(node);
 		}
-		
+		MPI_Finalize();
 	}
 	
 	return 0;

@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <mpi.h>
+#include <cstdlib>
 #include "dataStructures.h"
 
 // Following definitions will be provided by the framework -------------
